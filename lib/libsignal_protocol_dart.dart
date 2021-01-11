@@ -24,6 +24,7 @@ export 'src/ecc/ECPublicKey.dart';
 export 'src/groups/GroupCipher.dart';
 export 'src/groups/GroupSessionBuilder.dart';
 export 'src/groups/SenderKeyName.dart';
+export 'src/groups/state/SenderKeyStore.dart';
 export 'src/groups/state/InMemorySenderKeyStore.dart';
 
 export 'src/protocol/CiphertextMessage.dart';
