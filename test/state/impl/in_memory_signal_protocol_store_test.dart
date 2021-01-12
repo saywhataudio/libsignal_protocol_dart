@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 import '../../test_in_memory_signal_protocol_store.dart';
 
 void main() {
-  test('should encrypt/decrypt message from Alice, to Bob and back again', () {
+  test('should encrypt/decrypt message from Alice, to Bob and back again', () async {
     final aliceStore = TestInMemorySignalProtocolStore();
     final bobStore = TestInMemorySignalProtocolStore();
     final msgOrig = "L'homme est condamné à être libre";
@@ -39,11 +39,10 @@ void main() {
       bobStore.getIdentityKeyPair().getPublicKey(),
     );
 
-    SessionBuilder.fromSignalStore(aliceStore, bobAddress)
-        .processPreKeyBundle(bobPreKey);
+    await SessionBuilder.fromSignalStore(aliceStore, bobAddress).processPreKeyBundle(bobPreKey);
 
     var aliceSessionCipher = SessionCipher.fromStore(aliceStore, bobAddress);
-    var msgAliceToBob = aliceSessionCipher.encrypt(utf8.encode(msgOrig));
+    var msgAliceToBob = await aliceSessionCipher.encrypt(utf8.encode(msgOrig));
 
     // Pretend that Alice has now sent the message to Bob
 
@@ -72,7 +71,7 @@ void main() {
     );
 
     var bobSessionCipher = SessionCipher.fromStore(bobStore, aliceAddress);
-    var msgDecrypted = bobSessionCipher.decrypt(msgIn);
+    var msgDecrypted = await bobSessionCipher.decrypt(msgIn);
     var msgDecoded = utf8.decode(msgDecrypted, allowMalformed: true);
     expect(msgDecoded, msgOrig);
 
@@ -80,7 +79,7 @@ void main() {
     // Bob to encrypt and send to Alice...
     //
 
-    var msgBobToAlice = bobSessionCipher.encrypt(utf8.encode(msgDecoded));
+    var msgBobToAlice = await bobSessionCipher.encrypt(utf8.encode(msgDecoded));
     expect(
       msgBobToAlice.getType(),
       CiphertextMessage.WHISPER_TYPE,
@@ -90,7 +89,7 @@ void main() {
     // Alice to decrypt...
     //
 
-    msgDecrypted = aliceSessionCipher.decryptFromSignal(
+    msgDecrypted = await aliceSessionCipher.decryptFromSignal(
       SignalMessage.fromSerialized(msgBobToAlice.serialize()),
     );
     msgDecoded = utf8.decode(msgDecrypted, allowMalformed: true);

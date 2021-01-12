@@ -1,17 +1,18 @@
-import '../SignalProtocolAddress.dart';
+import 'dart:async';
 
+import '../SignalProtocolAddress.dart';
 import 'SessionRecord.dart';
 
 abstract class SessionStore {
-  SessionRecord loadSession(SignalProtocolAddress address);
+  FutureOr<SessionRecord> loadSession(SignalProtocolAddress address);
 
-  List<int> getSubDeviceSessions(String name);
+  FutureOr<List<int>> getSubDeviceSessions(String name);
 
-  void storeSession(SignalProtocolAddress address, SessionRecord record);
+  FutureOr<void> storeSession(SignalProtocolAddress address, SessionRecord record);
 
-  bool containsSession(SignalProtocolAddress address);
+  FutureOr<bool> containsSession(SignalProtocolAddress address);
 
-  void deleteSession(SignalProtocolAddress address);
+  FutureOr<void> deleteSession(SignalProtocolAddress address);
 
-  void deleteAllSessions(String name);
+  FutureOr<void> deleteAllSessions(String name);
 }

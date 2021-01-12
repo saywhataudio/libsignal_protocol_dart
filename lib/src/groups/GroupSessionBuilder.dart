@@ -11,36 +11,26 @@ class GroupSessionBuilder {
 
   GroupSessionBuilder(this._senderKeyStore);
 
-  void process(SenderKeyName senderKeyName,
-      SenderKeyDistributionMessageWrapper senderKeyDistributionMessageWrapper) {
+  Future<void> process(SenderKeyName senderKeyName, SenderKeyDistributionMessageWrapper senderKeyDistributionMessageWrapper) async {
     // TODO sync
-    var senderKeyRecord = _senderKeyStore.loadSenderKey(senderKeyName);
-    senderKeyRecord.addSenderKeyState(
-        senderKeyDistributionMessageWrapper.id,
-        senderKeyDistributionMessageWrapper.iteration,
-        senderKeyDistributionMessageWrapper.chainKey,
-        senderKeyDistributionMessageWrapper.signatureKey);
+    var senderKeyRecord = await _senderKeyStore.loadSenderKey(senderKeyName);
+    senderKeyRecord.addSenderKeyState(senderKeyDistributionMessageWrapper.id, senderKeyDistributionMessageWrapper.iteration,
+        senderKeyDistributionMessageWrapper.chainKey, senderKeyDistributionMessageWrapper.signatureKey);
     _senderKeyStore.storeSenderKey(senderKeyName, senderKeyRecord);
   }
 
-  SenderKeyDistributionMessageWrapper create(SenderKeyName senderKeyName) {
+  Future<SenderKeyDistributionMessageWrapper> create(SenderKeyName senderKeyName) async {
     // TODO sync
     try {
-      var senderKeyRecord = _senderKeyStore.loadSenderKey(senderKeyName);
+      var senderKeyRecord = await _senderKeyStore.loadSenderKey(senderKeyName);
       if (senderKeyRecord.isEmpty) {
         senderKeyRecord.setSenderKeyState(
-            KeyHelper.generateSenderKeyId(),
-            0,
-            KeyHelper.generateSenderKey(),
-            KeyHelper.generateSenderSigningKey());
+            KeyHelper.generateSenderKeyId(), 0, KeyHelper.generateSenderKey(), KeyHelper.generateSenderSigningKey());
         _senderKeyStore.storeSenderKey(senderKeyName, senderKeyRecord);
       }
       var state = senderKeyRecord.getSenderKeyState();
       return SenderKeyDistributionMessageWrapper(
-          state.keyId,
-          state.senderChainKey.iteration,
-          state.senderChainKey.seed,
-          state.signingKeyPublic);
+          state.keyId, state.senderChainKey.iteration, state.senderChainKey.seed, state.signingKeyPublic);
     } on InvalidKeyIdException catch (e) {
       throw AssertionError(e);
     } on InvalidKeyException catch (e) {

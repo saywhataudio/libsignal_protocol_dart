@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:optional/optional.dart';
+
 import 'InvalidKeyException.dart';
 import 'SignalProtocolAddress.dart';
 import 'UntrustedIdentityException.dart';
@@ -15,10 +19,8 @@ import 'state/SessionStore.dart';
 import 'state/SignalProtocolStore.dart';
 import 'state/SignedPreKeyStore.dart';
 
-import 'package:optional/optional.dart';
-
 class SessionBuilder {
-  static final String TAG = 'SessionBulder';
+  static final String TAG = 'SessionBuilder';
 
   SessionStore _sessionStore;
   PreKeyStore _preKeyStore;
@@ -26,68 +28,54 @@ class SessionBuilder {
   IdentityKeyStore _identityKeyStore;
   SignalProtocolAddress _remoteAddress;
 
-  SessionBuilder(this._sessionStore, this._preKeyStore, this._signedPreKeyStore,
-      this._identityKeyStore, this._remoteAddress);
+  SessionBuilder(this._sessionStore, this._preKeyStore, this._signedPreKeyStore, this._identityKeyStore, this._remoteAddress);
 
-  SessionBuilder.fromSignalStore(
-      SignalProtocolStore store, SignalProtocolAddress remoteAddress)
+  SessionBuilder.fromSignalStore(SignalProtocolStore store, SignalProtocolAddress remoteAddress)
       : this(store, store, store, store, remoteAddress);
 
-  Optional<int> process(
-      SessionRecord sessionRecord, PreKeySignalMessage message) {
+  Future<Optional<int>> process(SessionRecord sessionRecord, PreKeySignalMessage message) async {
     var theirIdentityKey = message.getIdentityKey();
 
-    if (!_identityKeyStore.isTrustedIdentity(
-        _remoteAddress, theirIdentityKey, Direction.RECEIVING)) {
-      throw UntrustedIdentityException(
-          _remoteAddress.getName(), theirIdentityKey);
+    if (!await _identityKeyStore.isTrustedIdentity(_remoteAddress, theirIdentityKey, Direction.RECEIVING)) {
+      throw UntrustedIdentityException(_remoteAddress.getName(), theirIdentityKey);
     }
 
     var unsignedPreKeyId = processV3(sessionRecord, message);
 
-    _identityKeyStore.saveIdentity(_remoteAddress, theirIdentityKey);
+    await _identityKeyStore.saveIdentity(_remoteAddress, theirIdentityKey);
 
     return unsignedPreKeyId;
   }
 
-  Optional<int> processV3(
-      SessionRecord sessionRecord, PreKeySignalMessage message) {
-    if (sessionRecord.hasSessionState(
-        message.getMessageVersion(), message.getBaseKey().serialize())) {
-      print(
-          "We've already setup a session for this V3 message, letting bundled message fall through...");
+  Future<Optional<int>> processV3(SessionRecord sessionRecord, PreKeySignalMessage message) async {
+    if (sessionRecord.hasSessionState(message.getMessageVersion(), message.getBaseKey().serialize())) {
+      print("We've already setup a session for this V3 message, letting bundled message fall through...");
       return Optional.empty();
     }
 
-    var ourSignedPreKey = _signedPreKeyStore
-        .loadSignedPreKey(message.getSignedPreKeyId())
-        .getKeyPair();
+    var ourSignedPreKey = (await _signedPreKeyStore.loadSignedPreKey(message.getSignedPreKeyId())).getKeyPair();
 
     var parameters = BobSignalProtocolParameters.newBuilder();
 
     parameters
         .setTheirBaseKey(message.getBaseKey())
         .setTheirIdentityKey(message.getIdentityKey())
-        .setOurIdentityKey(_identityKeyStore.getIdentityKeyPair())
+        .setOurIdentityKey(await _identityKeyStore.getIdentityKeyPair())
         .setOurSignedPreKey(ourSignedPreKey)
         .setOurRatchetKey(ourSignedPreKey);
 
     if (message.getPreKeyId().isPresent) {
-      parameters.setOurOneTimePreKey(Optional.of(
-          _preKeyStore.loadPreKey(message.getPreKeyId().value).getKeyPair()));
+      parameters.setOurOneTimePreKey(Optional.of((await _preKeyStore.loadPreKey(message.getPreKeyId().value)).getKeyPair()));
     } else {
       parameters.setOurOneTimePreKey(Optional<ECKeyPair>.empty());
     }
 
     if (!sessionRecord.isFresh()) sessionRecord.archiveCurrentState();
 
-    RatchetingSession.initializeSessionBob(
-        sessionRecord.sessionState, parameters.create());
+    RatchetingSession.initializeSessionBob(sessionRecord.sessionState, parameters.create());
 
-    sessionRecord.sessionState.localRegistrationId =
-        _identityKeyStore.getLocalRegistrationId();
-    sessionRecord.sessionState.remoteRegistrationId =
-        message.getRegistrationId();
+    sessionRecord.sessionState.localRegistrationId = await _identityKeyStore.getLocalRegistrationId();
+    sessionRecord.sessionState.remoteRegistrationId = message.getRegistrationId();
     sessionRecord.sessionState.aliceBaseKey = message.getBaseKey().serialize();
 
     if (message.getPreKeyId().isPresent) {
@@ -97,19 +85,15 @@ class SessionBuilder {
     }
   }
 
-  void processPreKeyBundle(PreKeyBundle preKey) {
+  Future<void> processPreKeyBundle(PreKeyBundle preKey) async {
     //synchronized (SessionCipher.SESSION_LOCK) {
-    if (!_identityKeyStore.isTrustedIdentity(
-        _remoteAddress, preKey.getIdentityKey(), Direction.SENDING)) {
-      throw UntrustedIdentityException(
-          _remoteAddress.getName(), preKey.getIdentityKey());
+    if (!await _identityKeyStore.isTrustedIdentity(_remoteAddress, preKey.getIdentityKey(), Direction.SENDING)) {
+      throw UntrustedIdentityException(_remoteAddress.getName(), preKey.getIdentityKey());
     }
 
     if (preKey.getSignedPreKey() != null &&
         !Curve.verifySignature(
-            preKey.getIdentityKey().publicKey,
-            preKey.getSignedPreKey().serialize(),
-            preKey.getSignedPreKeySignature())) {
+            preKey.getIdentityKey().publicKey, preKey.getSignedPreKey().serialize(), preKey.getSignedPreKeySignature())) {
       throw InvalidKeyException('Invalid signature on device key!');
     }
 
@@ -117,19 +101,17 @@ class SessionBuilder {
       throw InvalidKeyException('No signed prekey!');
     }
 
-    var sessionRecord = _sessionStore.loadSession(_remoteAddress);
+    var sessionRecord = await _sessionStore.loadSession(_remoteAddress);
     var ourBaseKey = Curve.generateKeyPair();
     var theirSignedPreKey = preKey.getSignedPreKey();
     var theirOneTimePreKey = Optional.ofNullable(preKey.getPreKey());
-    var theirOneTimePreKeyId = theirOneTimePreKey.isPresent
-        ? Optional.of(preKey.getPreKeyId())
-        : Optional<int>.empty();
+    var theirOneTimePreKeyId = theirOneTimePreKey.isPresent ? Optional.of(preKey.getPreKeyId()) : Optional<int>.empty();
 
     var parameters = AliceSignalProtocolParameters.newBuilder();
 
     parameters
         .setOurBaseKey(ourBaseKey)
-        .setOurIdentityKey(_identityKeyStore.getIdentityKeyPair())
+        .setOurIdentityKey(await _identityKeyStore.getIdentityKeyPair())
         .setTheirIdentityKey(preKey.getIdentityKey())
         .setTheirSignedPreKey(theirSignedPreKey)
         .setTheirRatchetKey(theirSignedPreKey)
@@ -137,19 +119,15 @@ class SessionBuilder {
 
     if (!sessionRecord.isFresh()) sessionRecord.archiveCurrentState();
 
-    RatchetingSession.initializeSessionAlice(
-        sessionRecord.sessionState, parameters.create());
+    RatchetingSession.initializeSessionAlice(sessionRecord.sessionState, parameters.create());
 
-    sessionRecord.sessionState.setUnacknowledgedPreKeyMessage(
-        theirOneTimePreKeyId, preKey.getSignedPreKeyId(), ourBaseKey.publicKey);
-    sessionRecord.sessionState.localRegistrationId =
-        _identityKeyStore.getLocalRegistrationId();
-    sessionRecord.sessionState.remoteRegistrationId =
-        preKey.getRegistrationId();
+    sessionRecord.sessionState.setUnacknowledgedPreKeyMessage(theirOneTimePreKeyId, preKey.getSignedPreKeyId(), ourBaseKey.publicKey);
+    sessionRecord.sessionState.localRegistrationId = await _identityKeyStore.getLocalRegistrationId();
+    sessionRecord.sessionState.remoteRegistrationId = preKey.getRegistrationId();
     sessionRecord.sessionState.aliceBaseKey = ourBaseKey.publicKey.serialize();
 
-    _identityKeyStore.saveIdentity(_remoteAddress, preKey.getIdentityKey());
-    _sessionStore.storeSession(_remoteAddress, sessionRecord);
+    await _identityKeyStore.saveIdentity(_remoteAddress, preKey.getIdentityKey());
+    await _sessionStore.storeSession(_remoteAddress, sessionRecord);
     //}
   }
 }

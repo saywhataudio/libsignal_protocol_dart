@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'PreKeyRecord.dart';
 
 abstract class PreKeyStore {
-  PreKeyRecord loadPreKey(int preKeyId); //  throws InvalidKeyIdException;
+  FutureOr<PreKeyRecord> loadPreKey(int preKeyId); //  throws InvalidKeyIdException;
 
-  void storePreKey(int preKeyId, PreKeyRecord record);
+  FutureOr<void> storePreKey(int preKeyId, PreKeyRecord record);
 
-  bool containsPreKey(int preKeyId);
+  FutureOr<bool> containsPreKey(int preKeyId);
 
-  void removePreKey(int preKeyId);
+  FutureOr<void> removePreKey(int preKeyId);
 }
